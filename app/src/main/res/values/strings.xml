@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Mobile Codex</string>
+    <string name="tab_chat">对话</string>
+    <string name="tab_files">文件</string>
+    <string name="tab_settings">设置</string>
+    <string name="workspace_local">本地工作区</string>
+    <string name="workspace_github">GitHub 仓库</string>
+    <string name="btn_send">发送</string>
+    <string name="btn_save">保存</string>
+    <string name="btn_commit">提交</string>
+    <string name="btn_undo">撤销</string>
+    <string name="hint_input_message">输入消息...</string>
+    <string name="hint_search_files">搜索文件...</string>
+    <string name="loading">加载中...</string>
+    <string name="error_generic">发生错误</string>
+    <string name="error_network">网络错误</string>
+    <string name="settings_ai">AI 设置</string>
+    <string name="settings_github">GitHub 设置</string>
+    <string name="settings_app">应用设置</string>
+    <string name="settings_api_key">API Key</string>
+    <string name="settings_model">模型</string>
+    <string name="settings_system_prompt">系统提示词</string>
+    <string name="settings_github_token">GitHub Token</string>
+    <string name="settings_theme">主题</string>
+    <string name="settings_language">语言</string>
+    <string name="clear_chat_history">清除聊天记录</string>
+    <string name="clear_workspace">清除本地工作区</string>
+    <string name="test_connection">测试连接</string>
+    <string name="no_files">暂无文件</string>
+    <string name="no_messages">开始与 AI 对话吧</string>
+</resources>
