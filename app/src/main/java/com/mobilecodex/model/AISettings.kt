@@ -107,53 +107,53 @@ data class AISettings(
 请使用中文回复，保持专业和友好的语气。在提供代码修改时，请解释你的修改原因和影响。"""
         
         /**
-         * 获取提供商支持的默认模型列表
-         */
-        val AIProvider.defaultModel: String
-            get() = when (this) {
-                AIProvider.OPENAI -> "gpt-4"
-                AIProvider.ANTHROPIC -> "claude-3-sonnet-20240229"
-                AIProvider.GOOGLE -> "gemini-pro"
-                AIProvider.AZURE -> "gpt-4"
-                AIProvider.CUSTOM -> ""
-            }
-        
-        /**
-         * 获取提供商支持的模型列表
-         */
-        val AIProvider.availableModels: List<String>
-            get() = when (this) {
-                AIProvider.OPENAI -> listOf(
-                    "gpt-4-turbo-preview",
-                    "gpt-4",
-                    "gpt-4-32k",
-                    "gpt-3.5-turbo",
-                    "gpt-3.5-turbo-16k"
-                )
-                AIProvider.ANTHROPIC -> listOf(
-                    "claude-3-opus-20240229",
-                    "claude-3-sonnet-20240229",
-                    "claude-3-haiku-20240307",
-                    "claude-2.1",
-                    "claude-2.0"
-                )
-                AIProvider.GOOGLE -> listOf(
-                    "gemini-pro",
-                    "gemini-pro-vision",
-                    "gemini-ultra"
-                )
-                AIProvider.AZURE -> listOf(
-                    "gpt-4",
-                    "gpt-4-32k",
-                    "gpt-35-turbo",
-                    "gpt-35-turbo-16k"
-                )
-                AIProvider.CUSTOM -> emptyList()
-            }
-        
-        /**
          * 创建默认设置
          */
         fun default() = AISettings()
     }
 }
+
+/**
+ * 获取提供商支持的默认模型
+ */
+val AIProvider.defaultModel: String
+    get() = when (this) {
+        AIProvider.OPENAI -> "gpt-4"
+        AIProvider.ANTHROPIC -> "claude-3-sonnet-20240229"
+        AIProvider.GOOGLE -> "gemini-pro"
+        AIProvider.AZURE -> "gpt-4"
+        AIProvider.CUSTOM -> ""
+    }
+
+/**
+ * 获取提供商支持的模型列表
+ */
+val AIProvider.availableModels: List<String>
+    get() = when (this) {
+        AIProvider.OPENAI -> listOf(
+            "gpt-4-turbo-preview",
+            "gpt-4",
+            "gpt-4-32k",
+            "gpt-3.5-turbo",
+            "gpt-3.5-turbo-16k"
+        )
+        AIProvider.ANTHROPIC -> listOf(
+            "claude-3-opus-20240229",
+            "claude-3-sonnet-20240229",
+            "claude-3-haiku-20240307",
+            "claude-2.1",
+            "claude-2.0"
+        )
+        AIProvider.GOOGLE -> listOf(
+            "gemini-pro",
+            "gemini-pro-vision",
+            "gemini-ultra"
+        )
+        AIProvider.AZURE -> listOf(
+            "gpt-4",
+            "gpt-4-32k",
+            "gpt-35-turbo",
+            "gpt-35-turbo-16k"
+        )
+        AIProvider.CUSTOM -> emptyList()
+    }

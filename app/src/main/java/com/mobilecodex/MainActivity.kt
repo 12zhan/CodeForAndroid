@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
                     (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
                 ) darkColorScheme() else lightColorScheme()
             ) {
-                MobileCodexApp()
+                MobileCodexAppContent()
             }
         }
     }
@@ -51,7 +51,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MobileCodexApp() {
+fun MobileCodexAppContent() {
     val navController = rememberNavController()
     val screens = listOf(Screen.Chat, Screen.Files, Screen.Settings)
 
