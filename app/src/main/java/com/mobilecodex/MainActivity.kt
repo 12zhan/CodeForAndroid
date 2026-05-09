@@ -21,6 +21,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.mobilecodex.ui.screens.chat.ChatScreen
+import com.mobilecodex.ui.screens.files.FilesScreen
+import com.mobilecodex.ui.screens.settings.SettingsScreen
+import com.mobilecodex.ui.theme.MobileCodexTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -38,11 +42,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MaterialTheme(
-                colorScheme = if (android.content.res.Configuration.UI_MODE_NIGHT_YES ==
-                    (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK)
-                ) darkColorScheme() else lightColorScheme()
-            ) {
+            MobileCodexTheme {
                 MobileCodexAppContent()
             }
         }
@@ -101,31 +101,16 @@ fun MobileCodexAppContent() {
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(Screen.Chat.route) {
-                // TODO: ChatScreen()
-                PlaceholderScreen("对话")
+                ChatScreen()
             }
             composable(Screen.Files.route) {
-                // TODO: FilesScreen()
-                PlaceholderScreen("文件")
+                FilesScreen()
             }
             composable(Screen.Settings.route) {
-                // TODO: SettingsScreen()
-                PlaceholderScreen("设置")
+                SettingsScreen()
             }
         }
     }
 }
 
-@Composable
-fun PlaceholderScreen(name: String) {
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = androidx.compose.ui.Alignment.Center
-    ) {
-        Text(
-            text = "$name 页面",
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
+
