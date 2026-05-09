@@ -92,7 +92,7 @@ fun FilesScreen() {
         // 操作栏
         FileActionBar(
             onExpandAll = { expandedFolders = sampleTree.filter { it.isDirectory }.map { it.path }.toSet() },
-            onCollapseAll = { expandedFolders = emptySet() }
+            onCollapseAll = { expandedFolders = emptySet<String>() }
         )
 
         // 文件列表和编辑器
@@ -524,7 +524,7 @@ private fun buildTreeItems(
 
 private fun getFileEmoji(node: GitTreeNode): String {
     return when {
-        node.isDirectory -> if (node.path in emptySet()) "📂" else "📁"
+        node.isDirectory -> if (node.path in emptySet<String>()) "📂" else "📁"
         node.extension == "kt" -> "🟣"
         node.extension == "java" -> "☕"
         node.extension == "xml" -> "📄"
