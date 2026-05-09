@@ -491,9 +491,13 @@ private fun buildTreeItems(
         val children = tree.filter { node ->
             val nodeParent = node.parentPath ?: ""
             nodeParent == parentPath
-        }.sortedWith(
-            compareByDescending<GitTreeNode> { it.isDirectory }.thenBy { it.fileName }
-        )
+        }.sortedWith(Comparator<GitTreeNode> { a, b ->
+            when {
+                a.isDirectory && !b.isDirectory -> -1
+                !a.isDirectory && b.isDirectory -> 1
+                else -> a.fileName.compareTo(b.fileName)
+            }
+        })
 
         children.forEach { node ->
             val isExpanded = node.path in expandedFolders
