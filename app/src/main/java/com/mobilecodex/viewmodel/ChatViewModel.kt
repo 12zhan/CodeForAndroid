@@ -2,6 +2,9 @@ package com.mobilecodex.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mobilecodex.data.repository.ChatRepository
+import com.mobilecodex.data.repository.SettingsRepository
+import com.mobilecodex.data.repository.toApiTool
 import com.mobilecodex.model.*
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -60,9 +63,8 @@ sealed class ChatEvent {
  */
 @HiltViewModel
 class ChatViewModel @Inject constructor(
-    // 注入的仓库将在这里添加
-    // private val chatRepository: ChatRepository,
-    // private val aiRepository: AIRepository
+    private val chatRepository: ChatRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
     
     // 聊天 UI 状态
@@ -72,6 +74,62 @@ class ChatViewModel @Inject constructor(
     // 一次性事件
     private val _events = MutableSharedFlow<ChatEvent>()
     val events: SharedFlow<ChatEvent> = _events.asSharedFlow()
+    
+    init {
+        // 从 SettingsRepository 同步 AI 设置
+        viewModelScope.launch {
+            settingsRepository.aiSettings.collect { settings ->
+                _uiState.update { it.copy(aiSettings = settings) }
+            }
+        }
+        
+        // 监听 ChatRepository 的对话变化
+        viewModelScope.launch {
+            chatRepository.currentConversation.collect { conversation ->
+                _uiState.update { it.copy(conversation = conversation) }
+            }
+        }
+        
+        // 监听 ChatRepository 的对话列表变化
+        viewModelScope.launch {
+            chatRepository.conversations.collect { list ->
+                _uiState.update { it.copy(conversations = list) }
+            }
+        }
+        
+        // 监听流式响应事件
+        viewModelScope.launch {
+            chatRepository.streamEvents.collect { delta ->
+                when {
+                    delta.functionCall != null -> {
+                        // AI 发起了 Function Calling
+                        _events.emit(
+                            ChatEvent.FunctionCallRequest(
+                                name = delta.functionCall.name ?: "",
+                                arguments = delta.functionCall.arguments ?: "{}",
+                                callId = "" // callId 从 tool_calls 中获取比较复杂，这里简化处理
+                            )
+                        )
+                    }
+                    delta.finishReason == "stop" || delta.finishReason == "length" -> {
+                        _uiState.update { it.copy(isGenerating = false, isStreaming = false, streamingContent = "") }
+                        _events.emit(ChatEvent.ResponseComplete)
+                    }
+                    delta.finishReason == "error" -> {
+                        _uiState.update { it.copy(isGenerating = false, isStreaming = false) }
+                    }
+                    delta.content.isNotEmpty() -> {
+                        _uiState.update { currentState ->
+                            currentState.copy(
+                                streamingContent = currentState.streamingContent + delta.content,
+                                isStreaming = true
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
     
     // 当前对话
     val conversation: StateFlow<ChatConversation> = _uiState
@@ -173,10 +231,11 @@ class ChatViewModel @Inject constructor(
                 attachedFiles = _uiState.value.attachedFiles
             )
             
-            // 添加到对话
+            // 添加到 ChatRepository
+            chatRepository.addMessage(userMessage)
+            
             _uiState.update { currentState ->
                 currentState.copy(
-                    conversation = currentState.conversation.withMessage(userMessage),
                     inputText = "",
                     attachedFiles = emptyList(),
                     isGenerating = true,
@@ -197,7 +256,6 @@ class ChatViewModel @Inject constructor(
     private fun generateResponse() {
         viewModelScope.launch {
             try {
-                val conversation = _uiState.value.conversation
                 val settings = _uiState.value.aiSettings
                 
                 if (!settings.isConfigured) {
@@ -206,48 +264,21 @@ class ChatViewModel @Inject constructor(
                     return@launch
                 }
                 
-                // 添加助手消息占位符
-                val assistantMessage = ChatMessage.assistant("")
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        conversation = currentState.conversation.withMessage(assistantMessage),
-                        isStreaming = true,
-                        streamingContent = ""
-                    )
+                // 构建 Function Calling 工具列表（如果启用）
+                val tools = if (settings.enableFunctionCalling) {
+                    getAvailableTools().map { it.toApiTool() }
+                } else {
+                    null
                 }
                 
-                // TODO: 调用 AI API
-                // 1. 构建请求消息列表
-                // 2. 定义 Function Calling 工具
-                // 3. 发送请求并处理流式响应
-                // 4. 如果收到 Function Calling 请求，执行相应操作
+                // 调用 ChatRepository 生成流式响应
+                val result = chatRepository.generateStreamingResponse(tools)
                 
-                // 临时模拟响应
-                val mockResponse = "这是一个模拟的 AI 响应。实际实现需要集成 OpenAI 或其他 AI 服务的 API。"
-                
-                // 模拟流式传输
-                for (i in mockResponse.indices) {
-                    kotlinx.coroutines.delay(20)
-                    val partialContent = mockResponse.substring(0, i + 1)
-                    _uiState.update { currentState ->
-                        currentState.copy(streamingContent = partialContent)
-                    }
+                if (result.isFailure) {
+                    val error = result.exceptionOrNull()?.message ?: "未知错误"
+                    _uiState.update { it.copy(isGenerating = false, isStreaming = false, error = error) }
+                    _events.emit(ChatEvent.ShowError("生成响应失败: $error"))
                 }
-                
-                // 完成响应
-                _uiState.update { currentState ->
-                    val updatedConversation = currentState.conversation.updateLastMessage { msg ->
-                        msg.withStreamingContent(mockResponse).finishStreaming()
-                    }
-                    currentState.copy(
-                        conversation = updatedConversation,
-                        isGenerating = false,
-                        isStreaming = false,
-                        streamingContent = ""
-                    )
-                }
-                
-                _events.emit(ChatEvent.ResponseComplete)
             } catch (e: Exception) {
                 _uiState.update { it.copy(isGenerating = false, isStreaming = false, error = e.message) }
                 _events.emit(ChatEvent.ShowError("生成响应失败: ${e.message}"))
@@ -260,7 +291,7 @@ class ChatViewModel @Inject constructor(
      */
     fun handleFunctionResult(result: FunctionResult) {
         viewModelScope.launch {
-            // 添加函数结果消息
+            // 创建函数结果消息
             val functionMessage = ChatMessage(
                 role = MessageRole.FUNCTION,
                 content = result.result,
@@ -268,14 +299,16 @@ class ChatViewModel @Inject constructor(
                 functionCallId = result.callId
             )
             
-            _uiState.update { currentState ->
-                currentState.copy(
-                    conversation = currentState.conversation.withMessage(functionMessage)
-                )
-            }
+            // 通过 ChatRepository 继续对话
+            val continuationResult = chatRepository.continueWithFunctionResult(
+                listOf(functionMessage)
+            )
             
-            // 继续生成响应
-            generateResponse()
+            if (continuationResult.isFailure) {
+                val error = continuationResult.exceptionOrNull()?.message ?: "未知错误"
+                _uiState.update { it.copy(isGenerating = false, isStreaming = false, error = error) }
+                _events.emit(ChatEvent.ShowError("继续生成失败: $error"))
+            }
         }
     }
     
@@ -351,29 +384,16 @@ class ChatViewModel @Inject constructor(
      * 创建新对话
      */
     fun createNewConversation(title: String = "新对话") {
-        viewModelScope.launch {
-            val currentConversation = _uiState.value.conversation
-            if (currentConversation.hasMessages) {
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        conversations = currentState.conversations + currentConversation,
-                        conversation = ChatConversation.create(title = title)
-                    )
-                }
-            } else {
-                _uiState.update { it.copy(conversation = ChatConversation.create(title = title)) }
-            }
-            _events.emit(ChatEvent.ShowMessage("已创建新对话"))
-        }
+        chatRepository.createNewConversation(title)
+        _events.tryEmit(ChatEvent.ShowMessage("已创建新对话"))
     }
     
     /**
      * 切换到指定对话
      */
     fun switchConversation(conversationId: String) {
-        val conversation = _uiState.value.conversations.find { it.id == conversationId }
-        if (conversation != null) {
-            _uiState.update { it.copy(conversation = conversation, showConversationList = false) }
+        if (chatRepository.switchConversation(conversationId)) {
+            _uiState.update { it.copy(showConversationList = false) }
         }
     }
     
@@ -388,22 +408,14 @@ class ChatViewModel @Inject constructor(
      * 删除对话
      */
     fun deleteConversation(conversationId: String) {
-        _uiState.update { currentState ->
-            currentState.copy(
-                conversations = currentState.conversations.filter { it.id != conversationId }
-            )
-        }
+        chatRepository.deleteConversation(conversationId)
     }
     
     /**
      * 清除当前对话
      */
     fun clearCurrentConversation() {
-        _uiState.update { currentState ->
-            currentState.copy(
-                conversation = currentState.conversation.clearMessages()
-            )
-        }
+        chatRepository.clearCurrentConversation()
         viewModelScope.launch {
             _events.emit(ChatEvent.ShowMessage("对话已清空"))
         }
@@ -413,12 +425,7 @@ class ChatViewModel @Inject constructor(
      * 清除所有对话历史
      */
     fun clearAllConversations() {
-        _uiState.update { 
-            it.copy(
-                conversations = emptyList(),
-                conversation = ChatConversation.create()
-            )
-        }
+        chatRepository.clearAllConversations()
         viewModelScope.launch {
             _events.emit(ChatEvent.ShowMessage("所有对话历史已清除"))
         }
@@ -429,6 +436,9 @@ class ChatViewModel @Inject constructor(
      */
     fun updateAISettings(settings: AISettings) {
         _uiState.update { it.copy(aiSettings = settings) }
+        viewModelScope.launch {
+            settingsRepository.saveAISettings(settings)
+        }
     }
     
     /**
@@ -436,15 +446,7 @@ class ChatViewModel @Inject constructor(
      */
     fun stopGenerating() {
         _uiState.update { currentState ->
-            val updatedConversation = if (currentState.isStreaming) {
-                currentState.conversation.updateLastMessage { msg ->
-                    msg.finishStreaming()
-                }
-            } else {
-                currentState.conversation
-            }
             currentState.copy(
-                conversation = updatedConversation,
                 isGenerating = false,
                 isStreaming = false,
                 streamingContent = ""
@@ -465,11 +467,9 @@ class ChatViewModel @Inject constructor(
             updatedMessages.removeAt(updatedMessages.size - 1)
         }
         
-        _uiState.update { currentState ->
-            currentState.copy(
-                conversation = currentState.conversation.copy(messages = updatedMessages)
-            )
-        }
+        // 更新 ChatRepository 中的对话
+        val updatedConversation = conversation.copy(messages = updatedMessages)
+        _uiState.update { it.copy(conversation = updatedConversation) }
         
         // 重新生成
         generateResponse()
@@ -489,11 +489,8 @@ class ChatViewModel @Inject constructor(
             // 更新该消息的内容
             updatedMessages[messageIndex] = updatedMessages[messageIndex].copy(content = newContent)
             
-            _uiState.update { currentState ->
-                currentState.copy(
-                    conversation = currentState.conversation.copy(messages = updatedMessages)
-                )
-            }
+            val updatedConversation = conversation.copy(messages = updatedMessages)
+            _uiState.update { it.copy(conversation = updatedConversation) }
             
             // 重新生成
             generateResponse()
