@@ -11,8 +11,15 @@ data class EditorSettings(
     val wordWrap: Boolean = false,
     val highlightCurrentLine: Boolean = true,
     val autoIndent: Boolean = true,
-    val codeCompletion: Boolean = true
+    val codeCompletion: Boolean = true,
+    val syntaxHighlighting: Boolean = true
 ) {
+    fun withFontSize(size: Int) = copy(fontSize = size)
+    fun withTabSize(size: Int) = copy(tabSize = size)
+    fun withShowLineNumbers(show: Boolean) = copy(showLineNumbers = show)
+    fun withWordWrap(wrap: Boolean) = copy(wordWrap = wrap)
+    fun withSyntaxHighlighting(enable: Boolean) = copy(syntaxHighlighting = enable)
+
     companion object {
         fun default() = EditorSettings()
     }
