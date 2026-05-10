@@ -10,8 +10,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import kotlin.math.ceil
 
@@ -20,6 +24,33 @@ class ChatRepository @Inject constructor(
     private val openAIApi: OpenAIApi,
     private val gson: Gson
 ) {
+    /**
+     * 根据自定义 Base URL 动态创建 API 实例，支持 DeepSeek 等兼容接口。
+     * 如果 baseUrl 与默认 OpenAI 地址一致，则复用注入的单例。
+     */
+    private fun getApi(baseUrl: String): OpenAIApi {
+        val normalizedUrl = baseUrl.trimEnd('/') + "/"
+        if (normalizedUrl == "https://api.openai.com/v1/") {
+            return openAIApi
+        }
+        val client = OkHttpClient.Builder()
+            .connectTimeout(60, TimeUnit.SECONDS)
+            .readTimeout(120, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .addInterceptor { chain ->
+                val request = chain.request().newBuilder()
+                    .addHeader("Content-Type", "application/json")
+                    .build()
+                chain.proceed(request)
+            }
+            .build()
+        return Retrofit.Builder()
+            .baseUrl(normalizedUrl)
+            .client(client)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+            .create(OpenAIApi::class.java)
+    }
     /**
      * 发送聊天消息（非流式）
      */
@@ -41,7 +72,8 @@ class ChatRepository @Inject constructor(
                 stream = false
             )
 
-            val response = openAIApi.createChatCompletion(authHeader, request)
+            val api = getApi(aiSettings.baseUrl)
+            val response = api.createChatCompletion(authHeader, request)
             if (response.isSuccessful) {
                 Result.success(response.body()!!)
             } else {
@@ -74,7 +106,8 @@ class ChatRepository @Inject constructor(
                 stream = true
             )
 
-            val response = openAIApi.createChatCompletionStream(authHeader, request)
+            val api = getApi(aiSettings.baseUrl)
+            val response = api.createChatCompletionStream(authHeader, request)
 
             if (!response.isSuccessful) {
                 val errorBody = response.errorBody()?.string() ?: "未知错误"
@@ -152,6 +185,26 @@ class ChatRepository @Inject constructor(
         )
 
         return allMessages
+    }
+
+    /**
+     * 获取可用模型列表
+     */
+    suspend fun fetchModels(aiSettings: AISettings): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            val authHeader = "Bearer ${aiSettings.apiKey}"
+            val api = getApi(aiSettings.baseUrl)
+            val response = api.listModels(authHeader)
+            if (response.isSuccessful) {
+                val models = response.body()?.data?.map { it.id }?.sorted() ?: emptyList()
+                Result.success(models)
+            } else {
+                val errorBody = response.errorBody()?.string() ?: "未知错误"
+                Result.failure(Exception("获取模型列表失败 ${response.code()}: $errorBody"))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("网络请求异常: ${e.message}", e))
+        }
     }
 
     /**

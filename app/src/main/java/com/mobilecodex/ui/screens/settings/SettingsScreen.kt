@@ -1,5 +1,6 @@
 package com.mobilecodex.ui.screens.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -118,13 +119,112 @@ fun SettingsScreen(
                     helperText = "API 端点地址（支持兼容接口）"
                 )
 
-                SettingsTextField(
-                    label = "模型",
-                    value = uiState.aiModelInput,
-                    onValueChange = { viewModel.updateAiModel(it) },
-                    placeholder = "gpt-4-turbo",
-                    helperText = "模型 ID，如 gpt-4-turbo, gpt-3.5-turbo"
-                )
+                // 模型输入 + 获取按钮 + 下拉选择
+                Column {
+                    Text(
+                        text = "模型",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = uiState.aiModelInput,
+                            onValueChange = { viewModel.updateAiModel(it) },
+                            modifier = Modifier.weight(1f),
+                            placeholder = { Text("gpt-4-turbo", fontSize = 14.sp) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Button(
+                            onClick = { viewModel.fetchModels() },
+                            enabled = !uiState.isLoadingModels && uiState.aiApiKeyInput.isNotBlank(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            if (uiState.isLoadingModels) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = MaterialTheme.colorScheme.onPrimary,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Text("获取", fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    // 模型下拉列表
+                    if (uiState.showModelDropdown && uiState.availableModels.isNotEmpty()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp
+                        ) {
+                            Column {
+                                uiState.availableModels.take(30).forEach { modelId ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable { viewModel.selectModel(modelId) }
+                                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Android,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                            tint = if (modelId == uiState.aiModelInput)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = modelId,
+                                            fontSize = 13.sp,
+                                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                            color = if (modelId == uiState.aiModelInput)
+                                                MaterialTheme.colorScheme.primary
+                                            else
+                                                MaterialTheme.colorScheme.onSurface,
+                                            fontWeight = if (modelId == uiState.aiModelInput)
+                                                FontWeight.Bold
+                                            else
+                                                FontWeight.Normal
+                                        )
+                                    }
+                                }
+                                if (uiState.availableModels.size > 30) {
+                                    Text(
+                                        text = "... 还有 ${uiState.availableModels.size - 30} 个模型",
+                                        modifier = Modifier.padding(12.dp),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "模型 ID，如 gpt-4-turbo, deepseek-chat",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),

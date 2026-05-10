@@ -3,6 +3,7 @@ package com.mobilecodex.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilecodex.model.*
+import com.mobilecodex.data.repository.ChatRepository
 import com.mobilecodex.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -26,12 +27,17 @@ data class SettingsUiState(
     val aiSystemPromptInput: String = "",
     val ghTokenInput: String = "",
     val editorFontSizeInput: String = "",
-    val editorTabSizeInput: String = ""
+    val editorTabSizeInput: String = "",
+    // 模型列表
+    val availableModels: List<String> = emptyList(),
+    val isLoadingModels: Boolean = false,
+    val showModelDropdown: Boolean = false
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val chatRepository: ChatRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -201,5 +207,63 @@ class SettingsViewModel @Inject constructor(
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    // --- 模型列表 ---
+
+    fun fetchModels() {
+        val apiKey = _uiState.value.aiApiKeyInput.trim()
+        val baseUrl = _uiState.value.aiBaseUrlInput.trim().ifBlank { "https://api.openai.com/v1" }
+
+        if (apiKey.isBlank()) {
+            _uiState.update { it.copy(error = "请先输入 API Key") }
+            return
+        }
+
+        _uiState.update { it.copy(isLoadingModels = true, error = null) }
+
+        viewModelScope.launch {
+            val settings = AISettings(
+                apiKey = apiKey,
+                baseUrl = baseUrl
+            )
+            chatRepository.fetchModels(settings)
+                .fold(
+                    onSuccess = { models ->
+                        _uiState.update {
+                            it.copy(
+                                availableModels = models,
+                                isLoadingModels = false,
+                                showModelDropdown = models.isNotEmpty()
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(
+                                isLoadingModels = false,
+                                error = "获取模型列表失败: ${error.message}"
+                            )
+                        }
+                    }
+                )
+        }
+    }
+
+    fun selectModel(modelId: String) {
+        _uiState.update {
+            it.copy(
+                aiModelInput = modelId,
+                showModelDropdown = false
+            )
+        }
+    }
+
+    fun toggleModelDropdown() {
+        _uiState.update { it.copy(showModelDropdown = !it.showModelDropdown) }
+    }
+
+    fun dismissModelDropdown() {
+        _uiState.update { it.copy(showModelDropdown = false) }
     }
 }
