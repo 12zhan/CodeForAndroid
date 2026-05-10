@@ -2,7 +2,12 @@ package com.mobilecodex.data.repository
 
 import android.util.Base64
 import com.mobilecodex.data.api.GitHubApi
-import com.mobilecodex.model.*
+import com.mobilecodex.model.FileContent
+import com.mobilecodex.model.GitHubContentItem
+import com.mobilecodex.model.GitHubRepository
+import com.mobilecodex.model.GitHubSettings
+import com.mobilecodex.model.GitHubUser
+import com.mobilecodex.model.GitTreeNode
 import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

@@ -27,7 +27,8 @@ import com.mobilecodex.model.VirtualFile
 import com.mobilecodex.viewmodel.FileViewModel
 import com.mobilecodex.viewmodel.GitHubViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun FilesScreen(
     gitHubViewModel: GitHubViewModel,

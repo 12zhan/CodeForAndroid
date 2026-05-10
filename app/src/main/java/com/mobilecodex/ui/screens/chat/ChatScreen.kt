@@ -25,7 +25,8 @@ import com.mobilecodex.viewmodel.ChatViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 @Composable
 fun ChatScreen(
     viewModel: ChatViewModel,
