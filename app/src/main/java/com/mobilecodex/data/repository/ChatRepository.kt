@@ -88,11 +88,13 @@ class ChatRepository @Inject constructor(
             }
 
             val reader = BufferedReader(InputStreamReader(body.byteStream()))
-            var fullContent = StringBuilder()
+            val fullContent = StringBuilder()
+            var line: String?
 
-            reader.forEachLine { line ->
-                if (line.startsWith("data: ")) {
-                    val data = line.removePrefix("data: ").trim()
+            while (reader.readLine().also { line = it } != null) {
+                val currentLine = line ?: continue
+                if (currentLine.startsWith("data: ")) {
+                    val data = currentLine.removePrefix("data: ").trim()
 
                     if (data == "[DONE]") {
                         emit(StreamResult.Done(fullContent.toString()))

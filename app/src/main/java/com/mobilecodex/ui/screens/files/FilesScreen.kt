@@ -696,7 +696,7 @@ private fun CodeEditor(
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
                     Text(
-                        text = "${file.content.lines().size} 行",
+                        text = "${file.content.orEmpty().lines().size} 行",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                     )
@@ -749,7 +749,7 @@ private fun CodeEditor(
             }
         } else {
             BasicTextField(
-                value = file.content,
+                value = file.content.orEmpty(),
                 onValueChange = onContentChange,
                 modifier = Modifier
                     .fillMaxSize()
@@ -762,7 +762,7 @@ private fun CodeEditor(
                 ),
                 decorationBox = { innerTextField ->
                     Box(modifier = Modifier.fillMaxSize()) {
-                        if (file.content.isEmpty()) {
+                        if (file.content.orEmpty().isEmpty()) {
                             Text(
                                 "// 文件为空",
                                 fontFamily = FontFamily.Monospace,

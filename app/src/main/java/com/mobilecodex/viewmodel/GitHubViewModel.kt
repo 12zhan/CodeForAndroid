@@ -3,7 +3,7 @@ package com.mobilecodex.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilecodex.model.*
-import com.mobilecodex.data.repository.GitHubRepository
+import com.mobilecodex.data.repository.GitHubApiRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,11 +13,11 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class GitHubUiState(
-    val repositories: List<GitHubRepository> = emptyList(),
+    val repositories: List<com.mobilecodex.model.GitHubRepository> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val searchQuery: String = "",
-    val selectedRepo: GitHubRepository? = null,
+    val selectedRepo: com.mobilecodex.model.GitHubRepository? = null,
     val fileTree: List<GitTreeNode> = emptyList(),
     val directoryContents: List<GitHubContentItem> = emptyList(),
     val currentPath: String = "",
@@ -27,7 +27,7 @@ data class GitHubUiState(
 
 @HiltViewModel
 class GitHubViewModel @Inject constructor(
-    private val gitHubRepository: GitHubRepository,
+    private val apiRepo: GitHubApiRepository,
     private val settingsViewModel: SettingsViewModel
 ) : ViewModel() {
 
@@ -48,14 +48,11 @@ class GitHubViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
-            gitHubRepository.listMyRepos(settings)
+            apiRepo.listMyRepos(settings)
                 .fold(
                     onSuccess = { repos ->
                         _uiState.update {
-                            it.copy(
-                                repositories = repos,
-                                isLoading = false
-                            )
+                            it.copy(repositories = repos, isLoading = false)
                         }
                     },
                     onFailure = { error ->
@@ -83,7 +80,7 @@ class GitHubViewModel @Inject constructor(
         _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
-            gitHubRepository.searchRepositories(settings, query)
+            apiRepo.searchRepositories(settings, query)
                 .fold(
                     onSuccess = { repos ->
                         _uiState.update { it.copy(repositories = repos, isLoading = false) }
@@ -97,7 +94,7 @@ class GitHubViewModel @Inject constructor(
         }
     }
 
-    fun selectRepository(repo: GitHubRepository) {
+    fun selectRepository(repo: com.mobilecodex.model.GitHubRepository) {
         _uiState.update {
             it.copy(
                 selectedRepo = repo,
@@ -109,7 +106,7 @@ class GitHubViewModel @Inject constructor(
         loadFileTree(repo)
     }
 
-    fun loadFileTree(repo: GitHubRepository? = _uiState.value.selectedRepo) {
+    fun loadFileTree(repo: com.mobilecodex.model.GitHubRepository? = _uiState.value.selectedRepo) {
         if (repo == null) return
         val settings = settingsViewModel.getCurrentGitHubSettings()
         if (!settings.isConfigured) return
@@ -125,7 +122,7 @@ class GitHubViewModel @Inject constructor(
                 return@launch
             }
 
-            gitHubRepository.getFileTree(settings, parts[0], parts[1], repo.defaultBranch)
+            apiRepo.getFileTree(settings, parts[0], parts[1], repo.defaultBranch)
                 .fold(
                     onSuccess = { tree ->
                         _uiState.update {
@@ -152,7 +149,7 @@ class GitHubViewModel @Inject constructor(
             val parts = repo.fullName.split("/")
             if (parts.size != 2) return@launch
 
-            gitHubRepository.getDirectoryContents(settings, parts[0], parts[1], path)
+            apiRepo.getDirectoryContents(settings, parts[0], parts[1], path)
                 .fold(
                     onSuccess = { contents ->
                         _uiState.update {

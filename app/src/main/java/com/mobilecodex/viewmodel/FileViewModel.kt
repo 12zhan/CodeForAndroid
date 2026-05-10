@@ -3,7 +3,7 @@ package com.mobilecodex.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilecodex.model.*
-import com.mobilecodex.data.repository.GitHubRepository
+import com.mobilecodex.data.repository.GitHubApiRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +28,7 @@ data class FileUiState(
 
 @HiltViewModel
 class FileViewModel @Inject constructor(
-    private val gitHubRepository: GitHubRepository,
+    private val apiRepo: GitHubApiRepository,
     private val settingsViewModel: SettingsViewModel
 ) : ViewModel() {
 
@@ -46,7 +46,6 @@ class FileViewModel @Inject constructor(
         val settings = settingsViewModel.getCurrentGitHubSettings()
         if (!settings.isConfigured) return
 
-        // 检查是否已经打开
         val existingFile = _uiState.value.openedFiles.find {
             it.path == path && it.name == name
         }
@@ -58,16 +57,19 @@ class FileViewModel @Inject constructor(
         _uiState.update { it.copy(isLoadingFile = true, error = null) }
 
         viewModelScope.launch {
-            // 尝试从 download_url 获取原始内容
             val contentResult = if (downloadUrl != null) {
-                gitHubRepository.getRawFileContent(settings, downloadUrl)
+                apiRepo.getRawFileContent(settings, downloadUrl)
             } else {
-                gitHubRepository.getFileContent(settings, owner, repo, path)
+                apiRepo.getFileContent(settings, owner, repo, path)
             }
 
             contentResult.fold(
-                onSuccess = { content ->
-                    val contentStr = if (content is FileContent) content.content else content as String
+                onSuccess = { result ->
+                    val contentStr = when (result) {
+                        is String -> result
+                        is FileContent -> result.content
+                        else -> ""
+                    }
                     val virtualFile = VirtualFile(
                         id = UUID.randomUUID().toString(),
                         name = name,
@@ -86,7 +88,6 @@ class FileViewModel @Inject constructor(
                     }
                 },
                 onFailure = { error ->
-                    // 创建空文件占位
                     val virtualFile = VirtualFile(
                         id = UUID.randomUUID().toString(),
                         name = name,
@@ -155,7 +156,7 @@ class FileViewModel @Inject constructor(
         _uiState.update { it.copy(isLoadingDirectory = true, currentPath = path) }
 
         viewModelScope.launch {
-            gitHubRepository.getDirectoryContents(settings, owner, repo, path)
+            apiRepo.getDirectoryContents(settings, owner, repo, path)
                 .fold(
                     onSuccess = { contents ->
                         _uiState.update {
@@ -183,9 +184,6 @@ class FileViewModel @Inject constructor(
         if (parentPath.isEmpty() && currentPath.isNotEmpty()) {
             _uiState.update { it.copy(currentPath = "", directoryContents = emptyList()) }
         } else if (parentPath != currentPath) {
-            val repo = settingsViewModel.getCurrentGitHubSettings()
-            // 需要知道 owner/repo，这里从其他地方获取
-            // 简化处理
             _uiState.update { it.copy(currentPath = parentPath) }
         }
     }
@@ -217,18 +215,17 @@ class FileViewModel @Inject constructor(
         _uiState.update { it.copy(isSaving = true, saveSuccess = false, error = null) }
 
         viewModelScope.launch {
-            gitHubRepository.createOrUpdateFile(
+            apiRepo.createOrUpdateFile(
                 settings = settings,
                 owner = owner,
                 repo = repo,
                 path = file.path,
-                content = file.content ?: "",
+                content = file.content.orEmpty(),
                 commitMessage = message,
                 sha = file.sha,
                 branch = branch
             ).fold(
                 onSuccess = { newSha ->
-                    // 更新文件的 sha 和 originalContent
                     _uiState.update { state ->
                         val updatedFiles = state.openedFiles.map { f ->
                             if (f.id == file.id) {

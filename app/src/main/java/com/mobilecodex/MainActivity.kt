@@ -206,7 +206,7 @@ private fun SidebarContent(
         Spacer(modifier = Modifier.weight(1f))
 
         // 底部设置
-        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+        Divider(modifier = Modifier.padding(horizontal = 16.dp))
         Spacer(modifier = Modifier.height(8.dp))
 
         NavigationDrawerItem(
