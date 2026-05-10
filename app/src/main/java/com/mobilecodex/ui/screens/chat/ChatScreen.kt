@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.mobilecodex.ui.screens.chat
 
 import androidx.compose.foundation.background
@@ -24,8 +26,6 @@ import com.mobilecodex.model.MessageRole
 import com.mobilecodex.viewmodel.ChatViewModel
 import java.text.SimpleDateFormat
 import java.util.*
-
-@file:OptIn(ExperimentalMaterial3Api::class)
 
 @Composable
 fun ChatScreen(

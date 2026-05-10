@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
 package com.mobilecodex.ui.screens.files
 
 import androidx.compose.foundation.background
@@ -26,8 +28,6 @@ import com.mobilecodex.model.GitHubContentItem
 import com.mobilecodex.model.VirtualFile
 import com.mobilecodex.viewmodel.FileViewModel
 import com.mobilecodex.viewmodel.GitHubViewModel
-
-@file:OptIn(ExperimentalMaterial3Api::class)
 
 @Composable
 fun FilesScreen(
