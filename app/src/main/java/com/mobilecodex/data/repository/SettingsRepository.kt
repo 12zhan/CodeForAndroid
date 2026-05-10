@@ -136,7 +136,7 @@ class SettingsRepository @Inject constructor(
     fun getAIProviderConfig(provider: AIProvider): AIProviderConfig {
         return AIProviderConfig(
             provider = provider,
-            baseUrl = provider.baseUrl,
+            baseUrl = provider.defaultEndpoint,
             models = provider.availableModels
         )
     }

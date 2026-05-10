@@ -1,6 +1,6 @@
 package com.mobilecodex.data.repository
 
-import com.mobilecodex.data.api.GitHubApi
+import com.mobilecodex.data.api.*
 import com.mobilecodex.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,13 +23,14 @@ class GitHubRepository @Inject constructor(
         return withContext(Dispatchers.IO) {
             val response = gitHubApi.getCurrentUser()
             if (response.isSuccessful) {
-                response.body() ?: throw Exception("获取用户信息失败：响应体为空")
+                val body = response.body() ?: throw Exception("获取用户信息失败：响应体为空")
+                body.toDomainModel()
             } else {
                 throw Exception("获取用户信息失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 获取用户仓库列表
      * @param page 页码（从1开始）
@@ -42,7 +43,7 @@ class GitHubRepository @Inject constructor(
         perPage: Int = 30,
         includePrivate: Boolean = true,
         includeForked: Boolean = true
-    ): List<GitHubRepository> {
+    ): List<com.mobilecodex.model.GitHubRepository> {
         return withContext(Dispatchers.IO) {
             val response = gitHubApi.getUserRepositories(
                 page = page,
@@ -50,22 +51,22 @@ class GitHubRepository @Inject constructor(
                 sort = "updated",
                 direction = "desc"
             )
-            
+
             if (response.isSuccessful) {
                 val repos = response.body() ?: emptyList()
-                
-                // 过滤仓库
+
+                // 过滤仓库并映射到领域模型
                 repos.filter { repo ->
-                    val privateFilter = if (includePrivate) true else !repo.isPrivate
-                    val forkFilter = if (includeForked) true else !repo.isFork
+                    val privateFilter = if (includePrivate) true else !repo.`private`
+                    val forkFilter = if (includeForked) true else !repo.fork
                     privateFilter && forkFilter
-                }
+                }.map { it.toDomainModel() }
             } else {
                 throw Exception("获取仓库列表失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 获取仓库文件树
      * @param owner 仓库所有者
@@ -86,16 +87,16 @@ class GitHubRepository @Inject constructor(
                 branch = branch,
                 recursive = if (recursive) 1 else null
             )
-            
+
             if (response.isSuccessful) {
                 val treeResponse = response.body()
-                treeResponse?.tree ?: emptyList()
+                treeResponse?.tree?.map { it.toDomainModel() } ?: emptyList()
             } else {
                 throw Exception("获取文件树失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 获取文件内容
      * @param owner 仓库所有者
@@ -116,15 +117,16 @@ class GitHubRepository @Inject constructor(
                 path = path,
                 ref = ref
             )
-            
+
             if (response.isSuccessful) {
-                response.body() ?: throw Exception("获取文件内容失败：响应体为空")
+                val body = response.body() ?: throw Exception("获取文件内容失败：响应体为空")
+                body.toDomainModel()
             } else {
                 throw Exception("获取文件内容失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 创建 Blob
      * @param owner 仓库所有者
@@ -142,7 +144,7 @@ class GitHubRepository @Inject constructor(
         return withContext(Dispatchers.IO) {
             val blobRequest = CreateBlobRequest(content = content, encoding = encoding)
             val response = gitHubApi.createBlob(owner = owner, repo = repo, body = blobRequest)
-            
+
             if (response.isSuccessful) {
                 response.body()?.sha ?: throw Exception("创建 Blob 失败：响应体为空")
             } else {
@@ -150,7 +152,7 @@ class GitHubRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * 创建 Tree
      * @param owner 仓库所有者
@@ -168,7 +170,7 @@ class GitHubRepository @Inject constructor(
         return withContext(Dispatchers.IO) {
             val treeRequest = CreateTreeRequest(base_tree = baseTree, tree = tree)
             val response = gitHubApi.createTree(owner = owner, repo = repo, body = treeRequest)
-            
+
             if (response.isSuccessful) {
                 response.body()?.sha ?: throw Exception("创建 Tree 失败：响应体为空")
             } else {
@@ -176,7 +178,7 @@ class GitHubRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * 创建 Commit
      * @param owner 仓库所有者
@@ -200,7 +202,7 @@ class GitHubRepository @Inject constructor(
                 parents = parents
             )
             val response = gitHubApi.createCommit(owner = owner, repo = repo, body = commitRequest)
-            
+
             if (response.isSuccessful) {
                 response.body()?.sha ?: throw Exception("创建 Commit 失败：响应体为空")
             } else {
@@ -208,7 +210,7 @@ class GitHubRepository @Inject constructor(
             }
         }
     }
-    
+
     /**
      * 更新 Ref
      * @param owner 仓库所有者
@@ -227,13 +229,13 @@ class GitHubRepository @Inject constructor(
         return withContext(Dispatchers.IO) {
             val refRequest = UpdateRefRequest(sha = sha, force = force)
             val response = gitHubApi.updateRef(owner = owner, repo = repo, ref = ref, body = refRequest)
-            
+
             if (!response.isSuccessful) {
                 throw Exception("更新 Ref 失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 获取仓库默认分支
      * @param owner 仓库所有者
@@ -243,15 +245,15 @@ class GitHubRepository @Inject constructor(
     suspend fun getDefaultBranch(owner: String, repo: String): String {
         return withContext(Dispatchers.IO) {
             val response = gitHubApi.getRepository(owner = owner, repo = repo)
-            
+
             if (response.isSuccessful) {
-                response.body()?.defaultBranch ?: "main"
+                response.body()?.default_branch ?: "main"
             } else {
                 throw Exception("获取仓库信息失败：${response.code()} ${response.message()}")
             }
         }
     }
-    
+
     /**
      * 提交文件更改
      * @param owner 仓库所有者
@@ -275,14 +277,14 @@ class GitHubRepository @Inject constructor(
                 throw Exception("获取分支引用失败：${refResponse.code()} ${refResponse.message()}")
             }
             val headSha = refResponse.body()?.`object`?.sha ?: throw Exception("无法获取 HEAD SHA")
-            
+
             // 2. 获取当前 Tree
             val commitResponse = gitHubApi.getCommit(owner, repo, headSha)
             if (!commitResponse.isSuccessful) {
                 throw Exception("获取提交信息失败：${commitResponse.code()} ${commitResponse.message()}")
             }
             val baseTreeSha = commitResponse.body()?.tree?.sha
-            
+
             // 3. 为每个文件创建 Blob
             val treeEntries = mutableListOf<TreeEntry>()
             for ((path, content) in files) {
@@ -296,121 +298,81 @@ class GitHubRepository @Inject constructor(
                     )
                 )
             }
-            
+
             // 4. 创建新的 Tree
             val newTreeSha = createTree(owner, repo, baseTreeSha, treeEntries)
-            
+
             // 5. 创建新的 Commit
             val newCommitSha = createCommit(
                 owner, repo, commitMessage, newTreeSha, listOf(headSha)
             )
-            
+
             // 6. 更新分支引用
             updateRef(owner, repo, "heads/$branch", newCommitSha)
-            
+
             newCommitSha
         }
     }
 }
 
-// ==================== 请求/响应数据类 ====================
+// ==================== 响应 → 领域模型映射 ====================
 
 /**
- * 创建 Blob 请求
+ * 将 API 用户响应映射为领域模型
  */
-data class CreateBlobRequest(
-    val content: String,
-    val encoding: String = "utf-8"
+private fun GitHubUserResponse.toDomainModel() = GitHubUser(
+    login = login,
+    id = id,
+    avatarUrl = avatar_url,
+    name = name,
+    email = email,
+    bio = bio,
+    publicRepos = public_repos,
+    followers = followers,
+    following = following,
+    htmlUrl = html_url
 )
 
 /**
- * 创建 Blob 响应
+ * 将 API 仓库响应映射为领域模型
  */
-data class CreateBlobResponse(
-    val sha: String,
-    val url: String
+private fun RepositoryResponse.toDomainModel() =
+    com.mobilecodex.model.GitHubRepository(
+        id = id,
+        name = name,
+        fullName = full_name,
+        description = description,
+        isPrivate = `private`,
+        isFork = fork,
+        htmlUrl = html_url,
+        defaultBranch = default_branch,
+        language = language,
+        stargazersCount = stargazers_count,
+        forksCount = forks_count,
+        updatedAt = updated_at
+    )
+
+/**
+ * 将 API 树节点响应映射为领域模型
+ */
+private fun TreeNodeResponse.toDomainModel() = GitTreeNode(
+    path = path,
+    mode = mode,
+    type = type,
+    sha = sha,
+    size = size,
+    url = url
 )
 
 /**
- * 创建 Tree 请求
+ * 将 API 文件内容响应映射为领域模型
  */
-data class CreateTreeRequest(
-    val base_tree: String?,
-    val tree: List<TreeEntry>
-)
-
-/**
- * 创建 Tree 响应
- */
-data class CreateTreeResponse(
-    val sha: String,
-    val url: String
-)
-
-/**
- * 创建 Commit 请求
- */
-data class CreateCommitRequest(
-    val message: String,
-    val tree: String,
-    val parents: List<String>,
-    val author: CommitAuthor? = null,
-    val committer: CommitAuthor? = null
-)
-
-/**
- * Commit 作者
- */
-data class CommitAuthor(
-    val name: String,
-    val email: String,
-    val date: String? = null
-)
-
-/**
- * 创建 Commit 响应
- */
-data class CreateCommitResponse(
-    val sha: String,
-    val url: String,
-    val author: CommitAuthor,
-    val committer: CommitAuthor,
-    val message: String,
-    val tree: TreeRef,
-    val parents: List<TreeRef>
-)
-
-/**
- * Tree 引用
- */
-data class TreeRef(
-    val sha: String,
-    val url: String
-)
-
-/**
- * 更新 Ref 请求
- */
-data class UpdateRefRequest(
-    val sha: String,
-    val force: Boolean = false
-)
-
-/**
- * Ref 响应
- */
-data class RefResponse(
-    val ref: String,
-    val node_id: String,
-    val url: String,
-    val `object`: RefObject
-)
-
-/**
- * Ref 对象
- */
-data class RefObject(
-    val sha: String,
-    val type: String,
-    val url: String
+private fun FileContentResponse.toDomainModel() = FileContent(
+    name = name,
+    path = path,
+    sha = sha,
+    size = size,
+    content = content,
+    encoding = encoding,
+    type = type
 )
