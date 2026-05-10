@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilecodex.model.*
 import com.mobilecodex.data.repository.GitHubApiRepository
+import com.mobilecodex.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,26 +30,30 @@ data class FileUiState(
 @HiltViewModel
 class FileViewModel @Inject constructor(
     private val apiRepo: GitHubApiRepository,
-    private val settingsViewModel: SettingsViewModel
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileUiState())
     val uiState: StateFlow<FileUiState> = _uiState.asStateFlow()
 
+    private var cachedGitHubSettings: GitHubSettings = GitHubSettings()
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settingsFlow.collect { appSettings ->
+                cachedGitHubSettings = appSettings.gitHubSettings
+            }
+        }
+    }
+
     fun openFile(
-        owner: String,
-        repo: String,
-        path: String,
-        name: String,
-        downloadUrl: String? = null,
-        sha: String? = null
+        owner: String, repo: String, path: String, name: String,
+        downloadUrl: String? = null, sha: String? = null
     ) {
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) return
 
-        val existingFile = _uiState.value.openedFiles.find {
-            it.path == path && it.name == name
-        }
+        val existingFile = _uiState.value.openedFiles.find { it.path == path && it.name == name }
         if (existingFile != null) {
             _uiState.update { it.copy(activeFile = existingFile) }
             return
@@ -71,36 +76,25 @@ class FileViewModel @Inject constructor(
                         else -> ""
                     }
                     val virtualFile = VirtualFile(
-                        id = UUID.randomUUID().toString(),
-                        name = name,
-                        path = path,
-                        content = contentStr,
-                        originalContent = contentStr,
-                        sha = sha,
-                        isModified = false
+                        id = UUID.randomUUID().toString(), name = name, path = path,
+                        content = contentStr, originalContent = contentStr, sha = sha, isModified = false
                     )
                     _uiState.update { state ->
                         state.copy(
                             openedFiles = state.openedFiles + virtualFile,
-                            activeFile = virtualFile,
-                            isLoadingFile = false
+                            activeFile = virtualFile, isLoadingFile = false
                         )
                     }
                 },
                 onFailure = { error ->
                     val virtualFile = VirtualFile(
-                        id = UUID.randomUUID().toString(),
-                        name = name,
-                        path = path,
-                        content = "// 无法加载文件内容\n// ${error.message}",
-                        sha = sha
+                        id = UUID.randomUUID().toString(), name = name, path = path,
+                        content = "// 无法加载文件内容\n// ${error.message}", sha = sha
                     )
                     _uiState.update { state ->
                         state.copy(
                             openedFiles = state.openedFiles + virtualFile,
-                            activeFile = virtualFile,
-                            isLoadingFile = false,
-                            error = error.message
+                            activeFile = virtualFile, isLoadingFile = false, error = error.message
                         )
                     }
                 }
@@ -111,68 +105,46 @@ class FileViewModel @Inject constructor(
     fun closeFile(fileId: String) {
         _uiState.update { state ->
             val updatedFiles = state.openedFiles.filter { it.id != fileId }
-            val newActive = if (state.activeFile?.id == fileId) {
-                updatedFiles.lastOrNull()
-            } else {
-                state.activeFile
-            }
-            state.copy(openedFiles = updatedFiles, activeFile = newActive)
+            state.copy(
+                openedFiles = updatedFiles,
+                activeFile = if (state.activeFile?.id == fileId) updatedFiles.lastOrNull() else state.activeFile
+            )
         }
     }
 
     fun selectFile(fileId: String) {
         _uiState.update { state ->
-            val file = state.openedFiles.find { it.id == fileId }
-            state.copy(activeFile = file)
+            state.copy(activeFile = state.openedFiles.find { it.id == fileId })
         }
     }
 
     fun updateFileContent(fileId: String, newContent: String) {
         _uiState.update { state ->
             val updatedFiles = state.openedFiles.map { file ->
-                if (file.id == fileId) {
-                    file.copy(
-                        content = newContent,
-                        isModified = newContent != file.originalContent
-                    )
-                } else file
+                if (file.id == fileId)
+                    file.copy(content = newContent, isModified = newContent != file.originalContent)
+                else file
             }
             val updatedActive = state.activeFile?.let {
-                if (it.id == fileId) updatedFiles.find { f -> f.id == fileId } ?: it
-                else it
+                if (it.id == fileId) updatedFiles.find { f -> f.id == fileId } ?: it else it
             }
             state.copy(openedFiles = updatedFiles, activeFile = updatedActive)
         }
     }
 
-    fun loadDirectoryContents(
-        owner: String,
-        repo: String,
-        path: String
-    ) {
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+    fun loadDirectoryContents(owner: String, repo: String, path: String) {
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) return
-
         _uiState.update { it.copy(isLoadingDirectory = true, currentPath = path) }
 
         viewModelScope.launch {
             apiRepo.getDirectoryContents(settings, owner, repo, path)
                 .fold(
                     onSuccess = { contents ->
-                        _uiState.update {
-                            it.copy(
-                                directoryContents = contents,
-                                isLoadingDirectory = false
-                            )
-                        }
+                        _uiState.update { it.copy(directoryContents = contents, isLoadingDirectory = false) }
                     },
                     onFailure = { error ->
-                        _uiState.update {
-                            it.copy(
-                                isLoadingDirectory = false,
-                                error = error.message
-                            )
-                        }
+                        _uiState.update { it.copy(isLoadingDirectory = false, error = error.message) }
                     }
                 )
         }
@@ -181,32 +153,22 @@ class FileViewModel @Inject constructor(
     fun navigateUp() {
         val currentPath = _uiState.value.currentPath
         val parentPath = currentPath.substringBeforeLast("/", "")
-        if (parentPath.isEmpty() && currentPath.isNotEmpty()) {
-            _uiState.update { it.copy(currentPath = "", directoryContents = emptyList()) }
-        } else if (parentPath != currentPath) {
-            _uiState.update { it.copy(currentPath = parentPath) }
+        _uiState.update {
+            if (parentPath.isEmpty() && currentPath.isNotEmpty())
+                it.copy(currentPath = "", directoryContents = emptyList())
+            else if (parentPath != currentPath)
+                it.copy(currentPath = parentPath)
+            else it
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
+    fun clearError() { _uiState.update { it.copy(error = null) } }
+    fun updateCommitMessage(message: String) { _uiState.update { it.copy(commitMessage = message) } }
 
-    fun updateCommitMessage(message: String) {
-        _uiState.update { it.copy(commitMessage = message) }
-    }
-
-    fun commitActiveFile(
-        owner: String,
-        repo: String,
-        branch: String? = null
-    ) {
+    fun commitActiveFile(owner: String, repo: String, branch: String? = null) {
         val file = _uiState.value.activeFile ?: return
-        val message = _uiState.value.commitMessage.ifBlank {
-            "Update ${file.name}"
-        }
-
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val message = _uiState.value.commitMessage.ifBlank { "Update ${file.name}" }
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) {
             _uiState.update { it.copy(error = "请先配置 GitHub Token") }
             return
@@ -216,57 +178,31 @@ class FileViewModel @Inject constructor(
 
         viewModelScope.launch {
             apiRepo.createOrUpdateFile(
-                settings = settings,
-                owner = owner,
-                repo = repo,
-                path = file.path,
-                content = file.content.orEmpty(),
-                commitMessage = message,
-                sha = file.sha,
-                branch = branch
+                settings = settings, owner = owner, repo = repo, path = file.path,
+                content = file.content.orEmpty(), commitMessage = message, sha = file.sha, branch = branch
             ).fold(
                 onSuccess = { newSha ->
                     _uiState.update { state ->
                         val updatedFiles = state.openedFiles.map { f ->
-                            if (f.id == file.id) {
-                                f.copy(
-                                    sha = newSha,
-                                    originalContent = f.content,
-                                    isModified = false
-                                )
-                            } else f
-                        }
-                        val updatedActive = state.activeFile?.let {
-                            if (it.id == file.id) {
-                                it.copy(
-                                    sha = newSha,
-                                    originalContent = it.content,
-                                    isModified = false
-                                )
-                            } else it
+                            if (f.id == file.id) f.copy(sha = newSha, originalContent = f.content, isModified = false)
+                            else f
                         }
                         state.copy(
                             openedFiles = updatedFiles,
-                            activeFile = updatedActive,
-                            isSaving = false,
-                            saveSuccess = true,
-                            commitMessage = ""
+                            activeFile = state.activeFile?.let {
+                                if (it.id == file.id) it.copy(sha = newSha, originalContent = it.content, isModified = false)
+                                else it
+                            },
+                            isSaving = false, saveSuccess = true, commitMessage = ""
                         )
                     }
                 },
                 onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isSaving = false,
-                            error = "提交失败: ${error.message}"
-                        )
-                    }
+                    _uiState.update { it.copy(isSaving = false, error = "提交失败: ${error.message}") }
                 }
             )
         }
     }
 
-    fun clearSaveSuccess() {
-        _uiState.update { it.copy(saveSuccess = false) }
-    }
+    fun clearSaveSuccess() { _uiState.update { it.copy(saveSuccess = false) } }
 }

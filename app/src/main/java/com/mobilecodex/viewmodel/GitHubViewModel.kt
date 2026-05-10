@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mobilecodex.model.*
 import com.mobilecodex.data.repository.GitHubApiRepository
+import com.mobilecodex.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,18 +29,28 @@ data class GitHubUiState(
 @HiltViewModel
 class GitHubViewModel @Inject constructor(
     private val apiRepo: GitHubApiRepository,
-    private val settingsViewModel: SettingsViewModel
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(GitHubUiState())
     val uiState: StateFlow<GitHubUiState> = _uiState.asStateFlow()
+
+    private var cachedGitHubSettings: GitHubSettings = GitHubSettings()
+
+    init {
+        viewModelScope.launch {
+            settingsRepository.settingsFlow.collect { appSettings ->
+                cachedGitHubSettings = appSettings.gitHubSettings
+            }
+        }
+    }
 
     fun updateSearchQuery(query: String) {
         _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun loadRepositories() {
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) {
             _uiState.update { it.copy(error = "请先在设置中配置 GitHub Token") }
             return
@@ -51,16 +62,11 @@ class GitHubViewModel @Inject constructor(
             apiRepo.listMyRepos(settings)
                 .fold(
                     onSuccess = { repos ->
-                        _uiState.update {
-                            it.copy(repositories = repos, isLoading = false)
-                        }
+                        _uiState.update { it.copy(repositories = repos, isLoading = false) }
                     },
                     onFailure = { error ->
                         _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                error = error.message ?: "获取仓库列表失败"
-                            )
+                            it.copy(isLoading = false, error = error.message ?: "获取仓库列表失败")
                         }
                     }
                 )
@@ -69,12 +75,9 @@ class GitHubViewModel @Inject constructor(
 
     fun searchRepositories() {
         val query = _uiState.value.searchQuery.trim()
-        if (query.isEmpty()) {
-            loadRepositories()
-            return
-        }
+        if (query.isEmpty()) { loadRepositories(); return }
 
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) return
 
         _uiState.update { it.copy(isLoading = true, error = null) }
@@ -96,19 +99,14 @@ class GitHubViewModel @Inject constructor(
 
     fun selectRepository(repo: com.mobilecodex.model.GitHubRepository) {
         _uiState.update {
-            it.copy(
-                selectedRepo = repo,
-                fileTree = emptyList(),
-                currentPath = "",
-                directoryContents = emptyList()
-            )
+            it.copy(selectedRepo = repo, fileTree = emptyList(), currentPath = "", directoryContents = emptyList())
         }
         loadFileTree(repo)
     }
 
     fun loadFileTree(repo: com.mobilecodex.model.GitHubRepository? = _uiState.value.selectedRepo) {
         if (repo == null) return
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) return
 
         _uiState.update { it.copy(isLoadingTree = true) }
@@ -116,23 +114,16 @@ class GitHubViewModel @Inject constructor(
         viewModelScope.launch {
             val parts = repo.fullName.split("/")
             if (parts.size != 2) {
-                _uiState.update {
-                    it.copy(isLoadingTree = false, error = "无效的仓库路径")
-                }
+                _uiState.update { it.copy(isLoadingTree = false, error = "无效的仓库路径") }
                 return@launch
             }
-
             apiRepo.getFileTree(settings, parts[0], parts[1], repo.defaultBranch)
                 .fold(
                     onSuccess = { tree ->
-                        _uiState.update {
-                            it.copy(fileTree = tree, isLoadingTree = false)
-                        }
+                        _uiState.update { it.copy(fileTree = tree, isLoadingTree = false) }
                     },
                     onFailure = { error ->
-                        _uiState.update {
-                            it.copy(isLoadingTree = false, error = error.message)
-                        }
+                        _uiState.update { it.copy(isLoadingTree = false, error = error.message) }
                     }
                 )
         }
@@ -140,7 +131,7 @@ class GitHubViewModel @Inject constructor(
 
     fun navigateToDirectory(path: String) {
         val repo = _uiState.value.selectedRepo ?: return
-        val settings = settingsViewModel.getCurrentGitHubSettings()
+        val settings = cachedGitHubSettings
         if (!settings.isConfigured) return
 
         _uiState.update { it.copy(currentPath = path, isLoadingContent = true) }
@@ -148,21 +139,13 @@ class GitHubViewModel @Inject constructor(
         viewModelScope.launch {
             val parts = repo.fullName.split("/")
             if (parts.size != 2) return@launch
-
             apiRepo.getDirectoryContents(settings, parts[0], parts[1], path)
                 .fold(
                     onSuccess = { contents ->
-                        _uiState.update {
-                            it.copy(
-                                directoryContents = contents,
-                                isLoadingContent = false
-                            )
-                        }
+                        _uiState.update { it.copy(directoryContents = contents, isLoadingContent = false) }
                     },
                     onFailure = { error ->
-                        _uiState.update {
-                            it.copy(isLoadingContent = false, error = error.message)
-                        }
+                        _uiState.update { it.copy(isLoadingContent = false, error = error.message) }
                     }
                 )
         }
@@ -170,19 +153,11 @@ class GitHubViewModel @Inject constructor(
 
     fun goBackToRepositories() {
         _uiState.update {
-            it.copy(
-                selectedRepo = null,
-                fileTree = emptyList(),
-                directoryContents = emptyList(),
-                currentPath = ""
-            )
+            it.copy(selectedRepo = null, fileTree = emptyList(), directoryContents = emptyList(), currentPath = "")
         }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
-    }
-
+    fun clearError() { _uiState.update { it.copy(error = null) } }
     fun clearSearch() {
         _uiState.update { it.copy(searchQuery = "") }
         loadRepositories()
