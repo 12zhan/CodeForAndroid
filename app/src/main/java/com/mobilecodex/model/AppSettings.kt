@@ -5,14 +5,26 @@ package com.mobilecodex.model
  * 用于持久化应用级别的配置
  */
 data class AppSettings(
-    val theme: String = "system",         // "light", "dark", "system"
-    val language: String = "zh",           // 语言代码
-    val autoSave: Boolean = true,          // 是否自动保存
-    val codeFontSize: Int = 14,           // 代码字体大小
-    val showLineNumbers: Boolean = true,   // 是否显示行号
-    val tabSize: Int = 4,                 // Tab 缩进大小
-    val useSoftTabs: Boolean = true       // 是否使用空格代替 Tab
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val language: AppLanguage = AppLanguage.CHINESE,
+    val enableAnimations: Boolean = true,
+    val compactMode: Boolean = false,
+    val autoSave: Boolean = true,
+    val autoSaveInterval: Int = 300,
+    val showNotifications: Boolean = true,
+    val hapticFeedback: Boolean = true,
+    val editorSettings: EditorSettings = EditorSettings()
 ) {
+    fun withEditorSettings(editorSettings: EditorSettings) = copy(editorSettings = editorSettings)
+    fun withThemeMode(themeMode: ThemeMode) = copy(themeMode = themeMode)
+    fun withLanguage(language: AppLanguage) = copy(language = language)
+    fun withEnableAnimations(enable: Boolean) = copy(enableAnimations = enable)
+    fun withCompactMode(compact: Boolean) = copy(compactMode = compact)
+    fun withAutoSave(enabled: Boolean) = copy(autoSave = enabled)
+    fun withAutoSaveInterval(interval: Int) = copy(autoSaveInterval = interval)
+    fun withShowNotifications(enabled: Boolean) = copy(showNotifications = enabled)
+    fun withHapticFeedback(enabled: Boolean) = copy(hapticFeedback = enabled)
+
     companion object {
         fun default() = AppSettings()
     }
