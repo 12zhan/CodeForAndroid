@@ -2,151 +2,106 @@ package com.mobilecodex.data.repository
 
 import android.content.Context
 import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.google.gson.Gson
 import com.mobilecodex.model.*
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.android.scopes.ViewModelScoped
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
-import javax.inject.Singleton
 
-// DataStore 实例扩展
-private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "app_settings")
 
-/**
- * 设置仓库
- * 使用 DataStore 持久化应用设置
- */
-@Singleton
+@ViewModelScoped
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val gson: Gson
+    @ApplicationContext private val context: Context
 ) {
-    // DataStore 实例
-    private val dataStore = context.dataStore
-    
-    // 设置键
     private object Keys {
-        val AI_SETTINGS = stringPreferencesKey("ai_settings")
-        val GITHUB_SETTINGS = stringPreferencesKey("github_settings")
-        val APP_SETTINGS = stringPreferencesKey("app_settings")
+        val API_KEY = stringPreferencesKey("ai_api_key")
+        val AI_BASE_URL = stringPreferencesKey("ai_base_url")
+        val AI_MODEL = stringPreferencesKey("ai_model_id")
+        val AI_MAX_TOKENS = intPreferencesKey("ai_max_tokens")
+        val AI_TEMPERATURE = floatPreferencesKey("ai_temperature")
+        val AI_TOP_P = floatPreferencesKey("ai_top_p")
+        val AI_SYSTEM_PROMPT = stringPreferencesKey("ai_system_prompt")
+
+        val GH_TOKEN = stringPreferencesKey("gh_access_token")
+        val GH_USERNAME = stringPreferencesKey("gh_username")
+
+        val EDITOR_FONT_SIZE = intPreferencesKey("editor_font_size")
+        val EDITOR_TAB_SIZE = intPreferencesKey("editor_tab_size")
+        val EDITOR_USE_SPACES = booleanPreferencesKey("editor_use_spaces")
+        val EDITOR_SHOW_LINE_NUMBERS = booleanPreferencesKey("editor_show_line_numbers")
+        val EDITOR_WORD_WRAP = booleanPreferencesKey("editor_word_wrap")
+
+        val DARK_THEME = booleanPreferencesKey("dark_theme")
     }
-    
-    // AI 设置
-    val aiSettings: Flow<AISettings> = dataStore.data.map { preferences ->
-        val json = preferences[Keys.AI_SETTINGS]
-        if (json != null) {
-            try {
-                gson.fromJson(json, AISettings::class.java) ?: AISettings.default()
-            } catch (e: Exception) {
-                AISettings.default()
-            }
-        } else {
-            AISettings.default()
-        }
-    }
-    
-    // GitHub 设置
-    val githubSettings: Flow<GitHubSettings> = dataStore.data.map { preferences ->
-        val json = preferences[Keys.GITHUB_SETTINGS]
-        if (json != null) {
-            try {
-                gson.fromJson(json, GitHubSettings::class.java) ?: GitHubSettings.default()
-            } catch (e: Exception) {
-                GitHubSettings.default()
-            }
-        } else {
-            GitHubSettings.default()
-        }
-    }
-    
-    // 应用设置
-    val appSettings: Flow<AppSettings> = dataStore.data.map { preferences ->
-        val json = preferences[Keys.APP_SETTINGS]
-        if (json != null) {
-            try {
-                gson.fromJson(json, AppSettings::class.java) ?: AppSettings.default()
-            } catch (e: Exception) {
-                AppSettings.default()
-            }
-        } else {
-            AppSettings.default()
-        }
-    }
-    
-    /**
-     * 保存 AI 设置
-     */
-    suspend fun saveAISettings(settings: AISettings) {
-        dataStore.edit { preferences ->
-            preferences[Keys.AI_SETTINGS] = gson.toJson(settings)
-        }
-    }
-    
-    /**
-     * 保存 GitHub 设置
-     */
-    suspend fun saveGitHubSettings(settings: GitHubSettings) {
-        dataStore.edit { preferences ->
-            preferences[Keys.GITHUB_SETTINGS] = gson.toJson(settings)
-        }
-    }
-    
-    /**
-     * 保存应用设置
-     */
-    suspend fun saveAppSettings(settings: AppSettings) {
-        dataStore.edit { preferences ->
-            preferences[Keys.APP_SETTINGS] = gson.toJson(settings)
-        }
-    }
-    
-    /**
-     * 清除所有设置
-     */
-    suspend fun clearAllSettings() {
-        dataStore.edit { preferences ->
-            preferences.clear()
-        }
-    }
-    
-    /**
-     * 清除聊天历史（这里只清除设置，实际聊天历史由 ChatRepository 管理）
-     */
-    suspend fun clearChatHistory() {
-        // 聊天历史由 ChatRepository 管理
-        // 这里可以清除相关设置（如最近对话ID等）
-    }
-    
-    /**
-     * 清除工作区缓存
-     */
-    suspend fun clearWorkspaceCache() {
-        // 工作区缓存由 FileRepository 管理
-        // 这里可以清除相关设置
-    }
-    
-    /**
-     * 获取 AI 提供商配置
-     */
-    fun getAIProviderConfig(provider: AIProvider): AIProviderConfig {
-        return AIProviderConfig(
-            provider = provider,
-            baseUrl = provider.defaultEndpoint,
-            models = provider.availableModels
+
+    val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
+        AppSettings(
+            aiSettings = AISettings(
+                apiKey = prefs[Keys.API_KEY] ?: "",
+                baseUrl = prefs[Keys.AI_BASE_URL] ?: "https://api.openai.com/v1",
+                modelId = prefs[Keys.AI_MODEL] ?: "gpt-4-turbo",
+                maxTokens = prefs[Keys.AI_MAX_TOKENS] ?: 4096,
+                temperature = prefs[Keys.AI_TEMPERATURE] ?: 0.7f,
+                topP = prefs[Keys.AI_TOP_P] ?: 1.0f,
+                systemPrompt = prefs[Keys.AI_SYSTEM_PROMPT]
+                    ?: "你是一个专业的编程助手，帮助用户编写、审查和优化代码。"
+            ),
+            gitHubSettings = GitHubSettings(
+                accessToken = prefs[Keys.GH_TOKEN] ?: "",
+                username = prefs[Keys.GH_USERNAME] ?: ""
+            ),
+            editorSettings = EditorSettings(
+                fontSize = prefs[Keys.EDITOR_FONT_SIZE] ?: 14,
+                tabSize = prefs[Keys.EDITOR_TAB_SIZE] ?: 4,
+                useSpaces = prefs[Keys.EDITOR_USE_SPACES] ?: true,
+                showLineNumbers = prefs[Keys.EDITOR_SHOW_LINE_NUMBERS] ?: true,
+                wordWrap = prefs[Keys.EDITOR_WORD_WRAP] ?: false
+            ),
+            isDarkTheme = prefs[Keys.DARK_THEME] ?: true
         )
     }
-}
 
-/**
- * AI 提供商配置
- */
-data class AIProviderConfig(
-    val provider: AIProvider,
-    val baseUrl: String,
-    val models: List<String>
-)
+    suspend fun getSettings(): AppSettings {
+        return settingsFlow.first()
+    }
+
+    suspend fun updateAISettings(settings: AISettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.API_KEY] = settings.apiKey
+            prefs[Keys.AI_BASE_URL] = settings.baseUrl
+            prefs[Keys.AI_MODEL] = settings.modelId
+            prefs[Keys.AI_MAX_TOKENS] = settings.maxTokens
+            prefs[Keys.AI_TEMPERATURE] = settings.temperature
+            prefs[Keys.AI_TOP_P] = settings.topP
+            prefs[Keys.AI_SYSTEM_PROMPT] = settings.systemPrompt
+        }
+    }
+
+    suspend fun updateGitHubSettings(settings: GitHubSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.GH_TOKEN] = settings.accessToken
+            prefs[Keys.GH_USERNAME] = settings.username
+        }
+    }
+
+    suspend fun updateEditorSettings(settings: EditorSettings) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.EDITOR_FONT_SIZE] = settings.fontSize
+            prefs[Keys.EDITOR_TAB_SIZE] = settings.tabSize
+            prefs[Keys.EDITOR_USE_SPACES] = settings.useSpaces
+            prefs[Keys.EDITOR_SHOW_LINE_NUMBERS] = settings.showLineNumbers
+            prefs[Keys.EDITOR_WORD_WRAP] = settings.wordWrap
+        }
+    }
+
+    suspend fun setDarkTheme(isDark: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.DARK_THEME] = isDark
+        }
+    }
+}

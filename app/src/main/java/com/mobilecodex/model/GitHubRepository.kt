@@ -1,38 +1,27 @@
 package com.mobilecodex.model
 
+import com.google.gson.annotations.SerializedName
+
 /**
- * GitHub 仓库领域模型
+ * GitHub 仓库
  */
 data class GitHubRepository(
     val id: Long,
     val name: String,
-    val fullName: String,
-    val description: String?,
-    val isPrivate: Boolean,
-    val isFork: Boolean,
-    val htmlUrl: String,
-    val defaultBranch: String,
-    val language: String?,
-    val stargazersCount: Int,
-    val forksCount: Int,
-    val updatedAt: String,
-    val owner: GitHubUser? = null
-) {
-    companion object {
-        /**
-         * 二进制文件扩展名列表（不可编辑的文件类型）
-         */
-        val BINARY_EXTENSIONS = setOf(
-            "png", "jpg", "jpeg", "gif", "bmp", "ico", "svg",
-            "mp3", "wav", "ogg", "flac", "aac",
-            "mp4", "avi", "mkv", "mov", "webm",
-            "zip", "tar", "gz", "rar", "7z",
-            "apk", "aab", "jar", "dex",
-            "so", "dll", "dylib",
-            "ttf", "otf", "woff", "woff2",
-            "db", "sqlite", "sqlite3",
-            "bin", "dat", "exe", "class",
-            "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx"
-        )
-    }
-}
+    @SerializedName("full_name") val fullName: String,
+    @SerializedName("html_url") val htmlUrl: String,
+    val description: String? = null,
+    @SerializedName("private") val isPrivate: Boolean = false,
+    @SerializedName("fork") val isFork: Boolean = false,
+    @SerializedName("created_at") val createdAt: String? = null,
+    @SerializedName("updated_at") val updatedAt: String? = null,
+    @SerializedName("pushed_at") val pushedAt: String? = null,
+    @SerializedName("default_branch") val defaultBranch: String = "main",
+    val language: String? = null,
+    @SerializedName("stargazers_count") val stars: Int = 0,
+    @SerializedName("forks_count") val forks: Int = 0,
+    @SerializedName("open_issues_count") val openIssues: Int = 0,
+    @SerializedName("watchers_count") val watchers: Int = 0,
+    @SerializedName("size") val size: Int = 0,
+    @SerializedName("owner") val owner: GitHubUser? = null
+)
